@@ -45,6 +45,7 @@ Clean all:
 OP=redis-operator
 OP_KIND=Redis
 OP_GROUP=redis
+OPERATOR_IMAGE_REPO=redisoperator
 rm -rf $HOME/src/$OP
 #+END_SRC
 
@@ -100,10 +101,136 @@ go build -o bin/manager main.go
 
 Fill scaffolds. 
 
-** Define the API. Redis Types.
+** TODO Define the API. Redis Types.
 
 [[file:api/v1alpha1/redis_types.go]]
 
-** Define the Controller. Redis Controller.
+https://sdk.operatorframework.io/docs/building-operators/golang/tutorial/#define-the-api
+
+** TODO Define the Controller. Redis Controller.
 
 [[file:controllers/redis_controller.go]]
+
+** Build and Push operator image
+
+Kubebuilder is a prerequisite.
+
+#+BEGIN_SRC sh
+make docker-build docker-push IMG=danieladf/$OPERATOR_IMAGE_REPO:0.0.1
+#+END_SRC
+
+#+RESULTS:
+#+BEGIN_SRC sh
+/home/dani/go/bin/controller-gen object:headerFile="hack/boilerplate.go.txt" paths="./..."
+go fmt ./...
+go vet ./...
+/home/dani/go/bin/controller-gen "crd:trivialVersions=true" rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+mkdir -p /home/dani/src/redis-operator/testbin
+test -f /home/dani/src/redis-operator/testbin/setup-envtest.sh || curl -sSLo /home/dani/src/redis-operator/testbin/setup-envtest.sh https://raw.githubusercontent.com/kubernetes-sigs/controller-runtime/v0.6.3/hack/setup-envtest.sh
+source /home/dani/src/redis-operator/testbin/setup-envtest.sh; fetch_envtest_tools /home/dani/src/redis-operator/testbin; setup_envtest_env /home/dani/src/redis-operator/testbin; go test ./... -coverprofile cover.out
+/bin/sh: 1: source: not found
+/bin/sh: 1: fetch_envtest_tools: not found
+/bin/sh: 1: setup_envtest_env: not found
+?   	github.com/danieldorado/redis-operator	[no test files]
+?   	github.com/danieldorado/redis-operator/api/v1alpha1	[no test files]
+of statements
+docker build . -t danieladf/redisoperator:0.0.1
+Sending build context to Docker daemon  557.1kBSending build context to Docker daemon  30.08MBSending build context to Docker daemon  44.68MB
+Step 1/14 : FROM golang:1.13 as builder
+d6f3656320fe
+Step 2/14 : WORKDIR /workspace
+Using cache
+45b16fb6c5a8
+Step 3/14 : COPY go.mod go.mod
+Using cache
+752c536a1e62
+Step 4/14 : COPY go.sum go.sum
+Using cache
+afa2f7482596
+Step 5/14 : RUN go mod download
+Using cache
+88732f71e3ec
+Step 6/14 : COPY main.go main.go
+Using cache
+957957d7cde4
+Step 7/14 : COPY api/ api/
+Using cache
+f1210ca45afb
+Step 8/14 : COPY controllers/ controllers/
+Using cache
+143796d343e6
+Step 9/14 : RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o manager main.go
+Using cache
+7670820e4b49
+Step 10/14 : FROM gcr.io/distroless/static:nonroot
+aa99000bc55d
+Step 11/14 : WORKDIR /
+Using cache
+0f1cb4a3c624
+Step 12/14 : COPY --from=builder /workspace/manager .
+Using cache
+9ede3579a1d1
+Step 13/14 : USER nonroot:nonroot
+Using cache
+62bd865d0bf5
+Step 14/14 : ENTRYPOINT ["/manager"]
+Using cache
+65a3d70b8399
+Successfully built 65a3d70b8399
+Successfully tagged danieladf/redisoperator:0.0.1
+docker push danieladf/redisoperator:0.0.1
+The push refers to repository [docker.io/danieladf/redisoperator]
+
+[1A[1K[K8889619c9521: Preparing [1B
+[1A[1K[K7a5b9c0b4b14: Preparing [1B[1A[1K[K7a5b9c0b4b14: Layer already exists [1B[2A[1K[K8889619c9521: Layer already exists [2B0.0.1: digest: sha256:1144efb49318db7cf15f161dee22d15a76f209ecbc99f17b77dc89b32debab7a size: 739
+#+END_SRC
+
+** Install the CRD and deploy to the cluster the Deployment
+
+#+BEGIN_SRC sh
+make install
+make deploy IMG=danieladf/$OPERATOR_IMAGE_REPO:0.0.1
+#+END_SRC
+
+#+RESULTS:
+#+BEGIN_SRC sh
+/home/dani/go/bin/controller-gen "crd:trivialVersions=true" rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+/home/dani/go/bin/kustomize build config/crd | kubectl apply -f -
+customresourcedefinition.apiextensions.k8s.io/redis.redis.danieldorado.github.io created
+/home/dani/go/bin/controller-gen "crd:trivialVersions=true" rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+cd config/manager && /home/dani/go/bin/kustomize edit set image controller=danieladf/redisoperator:0.0.1
+/home/dani/go/bin/kustomize build config/default | kubectl apply -f -
+namespace/redis-operator-system created
+customresourcedefinition.apiextensions.k8s.io/redis.redis.danieldorado.github.io configured
+role.rbac.authorization.k8s.io/redis-operator-leader-election-role created
+clusterrole.rbac.authorization.k8s.io/redis-operator-manager-role created
+clusterrole.rbac.authorization.k8s.io/redis-operator-metrics-reader created
+clusterrole.rbac.authorization.k8s.io/redis-operator-proxy-role created
+rolebinding.rbac.authorization.k8s.io/redis-operator-leader-election-rolebinding created
+clusterrolebinding.rbac.authorization.k8s.io/redis-operator-manager-rolebinding created
+clusterrolebinding.rbac.authorization.k8s.io/redis-operator-proxy-rolebinding created
+service/redis-operator-controller-manager-metrics-service created
+deployment.apps/redis-operator-controller-manager created
+#+END_SRC
+
+- Deployed in: =namespace/redis-operator-system created=
+
+** Create a sample.
+
+#+BEGIN_SRC  sh
+oc project default
+oc apply -f config/samples/redis_v1alpha1_redis.yaml
+#+END_SRC
+
+#+RESULTS:
+#+BEGIN_SRC sh
+Already on project "default" on server "https://api.crc.testing:6443".
+redis.redis.danieldorado.github.io/redis-sample created
+#+END_SRC
+
+Clean all:
+
+#+BEGIN_SRC sh
+make uninstall
+oc delete project/redis-operator-system
+#+END_SRC
