@@ -107,6 +107,10 @@ Fill scaffolds.
 
 https://sdk.operatorframework.io/docs/building-operators/golang/tutorial/#define-the-api
 
+Properties:
+
+- Size: redis nodes number.
+
 ** TODO Define the Controller. Redis Controller.
 
 [[file:controllers/redis_controller.go]]
