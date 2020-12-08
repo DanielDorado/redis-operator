@@ -1,0 +1,7 @@
+apiVersion: redis.danieldorado.github.io/v1alpha1
+kind: Redis
+metadata:
+  name: redis-sample
+spec:
+  # Add fields here
+  foo: bar

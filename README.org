@@ -1,0 +1,109 @@
+* Redis notes
+
+** Redis Cluster vs Sentinel
+
+- Cluster: sharding (performance). 
+- Sentinel: HA (high availibility).
+
+* Redis Operator examples
+
+Lot of examples, but that assign redis slots only this one:
+
+- https://github.com/AmadeusITGroup/Redis-Operator
+
+Links:
+
+** Kubedb example
+
+KubeDB uses *PodDisruptionBudget* to ensure that majority of these cluster replicas are available during
+voluntary disruptions so that quorum is maintained and no data loss is occurred.
+
+
+https://kubedb.com (backup, clone)
+
+https://kubedb.com/docs/v2020.11.12/guides/redis/
+
+An important concept:
+
+RedisVersion CR: https://kubedb.com/docs/v2020.11.12/guides/redis/concepts/catalog/
+
+The redis part: https://github.com/kubedb/redis/
+
+* Operator madurity
+
+1. Install
+
+* Build
+
+All the commands I use to build the operator. To run the
+
+#+PROPERTY: header-args:sh  :session *sh*  :results output verbatim code replace
+
+Clean all:
+
+#+BEGIN_SRC sh
+OP=redis-operator
+OP_KIND=Redis
+OP_GROUP=redis
+rm -rf $HOME/src/$OP
+#+END_SRC
+
+#+RESULTS:
+#+BEGIN_SRC sh
+#+END_SRC
+
+#+BEGIN_SRC sh
+# OP is the operator name
+mkdir -p $HOME/src/$OP
+cd $HOME/src/$OP
+operator-sdk init --domain=danieldorado.github.io --repo=github.com/danieldorado/$OP
+#+END_SRC
+
+#+RESULTS:
+#+BEGIN_SRC sh
+
+$ $ Writing scaffold for you to edit...
+Get controller runtime:
+go get sigs.k8s.io/controller-runtime@v0.6.3
+Update go.mod:
+go mod tidy
+Running make:
+make
+/home/dani/go/bin/controller-gen object:headerFile="hack/boilerplate.go.txt" paths="./..."
+go fmt ./...
+go vet ./...
+go build -o bin/manager main.go
+Next: define a resource with:
+operator-sdk create api
+#+END_SRC
+
+Create CRD and Controller.
+
+-  ~main.go~ initializes the Manager.
+
+#+BEGIN_SRC sh
+operator-sdk create api --group $OP_GROUP --version v1alpha1 --kind $OP_KIND --resource=true --controller=true
+#+END_SRC
+
+#+RESULTS:
+#+BEGIN_SRC sh
+Writing scaffold for you to edit...
+api/v1alpha1/redis_types.go
+controllers/redis_controller.go
+Running make:
+make
+/home/dani/go/bin/controller-gen object:headerFile="hack/boilerplate.go.txt" paths="./..."
+go fmt ./...
+go vet ./...
+go build -o bin/manager main.go
+#+END_SRC
+
+Fill scaffolds. 
+
+** Define the API. Redis Types.
+
+[[file:api/v1alpha1/redis_types.go]]
+
+** Define the Controller. Redis Controller.
+
+[[file:controllers/redis_controller.go]]
