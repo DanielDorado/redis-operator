@@ -7,6 +7,25 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
+  - apps
+  resources:
+  - statefulsets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+- apiGroups:
   - redis.danieldorado.github.io
   resources:
   - redis
@@ -18,6 +37,12 @@ rules:
   - patch
   - update
   - watch
+- apiGroups:
+  - redis.danieldorado.github.io
+  resources:
+  - redis/finalizers
+  verbs:
+  - update
 - apiGroups:
   - redis.danieldorado.github.io
   resources:
