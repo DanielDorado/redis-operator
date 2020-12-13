@@ -50,6 +50,9 @@ type RedisReconciler struct {
 
 // +kubebuilder:rbac:groups=redis.danieldorado.github.io,resources=redis,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=redis.danieldorado.github.io,resources=redis/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=redis.danieldorado.github.io,resources=redis/finalizers,verbs=update
+// +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -151,7 +154,7 @@ func (r *RedisReconciler) statefulSetForRedis(redis *v1alpha1.Redis) *appsv1.Sta
 	ls := labelsForRedis(redis.Name)
 	replicas := int32(redis.Spec.Size)
 
-	dep := &appsv1.StatefulSet{
+	ss := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      redis.Name,
 			Namespace: redis.Namespace,
@@ -167,16 +170,16 @@ func (r *RedisReconciler) statefulSetForRedis(redis *v1alpha1.Redis) *appsv1.Sta
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{{
-						Image:   "",
-						Name:    "redisop",
+						Image:   "redis:5.0.10",
+						Name:    "redis",
 						Command: []string{},
 						Ports:   []corev1.ContainerPort{},
 					}},
 				}},
 		},
 	}
-	ctrl.SetControllerReference(redis, dep, r.Scheme)
-	return dep
+	ctrl.SetControllerReference(redis, ss, r.Scheme)
+	return ss
 }
 
 // TODO fill this

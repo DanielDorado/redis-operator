@@ -46,8 +46,19 @@ OP=redis-operator
 OP_KIND=Redis
 OP_GROUP=redis
 OPERATOR_IMAGE_REPO=redisoperator
-rm -rf $HOME/src/$OP
 #+END_SRC
+
+#+RESULTS:
+#+BEGIN_SRC sh
+#+END_SRC
+
+Clean all:
+
+#+BEGIN_SRC sh
+echo "Warning! deleting all!"
+# rm -rf $HOME/src/$OP
+#+END_SRC
+
 
 #+BEGIN_SRC sh
 # OP is the operator name
@@ -104,14 +115,108 @@ Use OpenAPI to validate: [[https://sdk.operatorframework.io/docs/building-operat
 Kubebuilder is a prerequisite.
 
 #+BEGIN_SRC sh
-make docker-build docker-push IMG=danieladf/$OPERATOR_IMAGE_REPO:0.0.1
+make docker-build docker-push IMG=danieladf/$OPERATOR_IMAGE_REPO:0.0.2
 #+END_SRC
 
-** TODO Install the CRD and deploy to the cluster the Deployment
+#+RESULTS:
+#+BEGIN_SRC sh
+/home/dani/go/bin/controller-gen object:headerFile="hack/boilerplate.go.txt" paths="./..."
+go fmt ./...
+go vet ./...
+/home/dani/go/bin/controller-gen "crd:trivialVersions=true" rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+mkdir -p /home/dani/src/redis-operator/testbin
+test -f /home/dani/src/redis-operator/testbin/setup-envtest.sh || curl -sSLo /home/dani/src/redis-operator/testbin/setup-envtest.sh https://raw.githubusercontent.com/kubernetes-sigs/controller-runtime/v0.6.3/hack/setup-envtest.sh
+source /home/dani/src/redis-operator/testbin/setup-envtest.sh; fetch_envtest_tools /home/dani/src/redis-operator/testbin; setup_envtest_env /home/dani/src/redis-operator/testbin; go test ./... -coverprofile cover.out
+/bin/sh: 1: source: not found
+/bin/sh: 1: fetch_envtest_tools: not found
+/bin/sh: 1: setup_envtest_env: not found
+?   	github.com/danieldorado/redis-operator	[no test files]
+?   	github.com/danieldorado/redis-operator/api/v1alpha1	[no test files]
+of statements
+docker build . -t danieladf/redisoperator:0.0.2
+Sending build context to Docker daemon  557.1kBSending build context to Docker daemon  29.52MBSending build context to Docker daemon  44.78MB
+Step 1/14 : FROM golang:1.13 as builder
+d6f3656320fe
+Step 2/14 : WORKDIR /workspace
+Using cache
+45b16fb6c5a8
+Step 3/14 : COPY go.mod go.mod
+Using cache
+bf6df76e5754
+Step 4/14 : COPY go.sum go.sum
+Using cache
+ddbf5326e204
+Step 5/14 : RUN go mod download
+Using cache
+6b2b181a6871
+Step 6/14 : COPY main.go main.go
+Using cache
+c948cdc617e5
+Step 7/14 : COPY api/ api/
+Using cache
+fd7e0e6b3cbb
+Step 8/14 : COPY controllers/ controllers/
+Using cache
+60d1bac0693f
+Step 9/14 : RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o manager main.go
+Using cache
+2065a8a589be
+Step 10/14 : FROM gcr.io/distroless/static:nonroot
+aa99000bc55d
+Step 11/14 : WORKDIR /
+Using cache
+0f1cb4a3c624
+Step 12/14 : COPY --from=builder /workspace/manager .
+Using cache
+a58815287c10
+Step 13/14 : USER nonroot:nonroot
+Using cache
+645619069cff
+Step 14/14 : ENTRYPOINT ["/manager"]
+Using cache
+60e492360c66
+Successfully built 60e492360c66
+Successfully tagged danieladf/redisoperator:0.0.2
+docker push danieladf/redisoperator:0.0.2
+The push refers to repository [docker.io/danieladf/redisoperator]
+
+[1A[1K[K00e79507958d: Preparing [1B
+[1A[1K[K7a5b9c0b4b14: Preparing [1B[1A[1K[K7a5b9c0b4b14: Layer already exists [1B[2A[1K[K00e79507958d: Layer already exists [2B0.0.2: digest: sha256:0b9c5551a67642599be2eaff6847e2c552ee787152c7ac210daebaef1dbacca1 size: 739
+#+END_SRC
+
+** Install the CRD and deploy to the cluster the Deployment
+
+Create and edit the role patch: [[file:config/default/role_patch.yml]] patch [[file:config/rbac/role.yaml]]
 
 #+BEGIN_SRC sh
 make install
-make deploy IMG=danieladf/$OPERATOR_IMAGE_REPO:0.0.1
+make deploy IMG=danieladf/$OPERATOR_IMAGE_REPO:0.0.2
+#+END_SRC
+
+#+RESULTS:
+#+BEGIN_SRC sh
+make: *** No rule to make target 'install'.  Stop.
+make: *** No rule to make target 'deploy'.  Stop.
+#+END_SRC
+
+#+RESULTS:
+#+BEGIN_SRC sh
+
+customresourcedefinition.apiextensions.k8s.io/redis.redis.danieldorado.github.io configured
+/usr/bin/sh: 32: customresourcedefinition.apiextensions.k8s.io/redis.redis.danieldorado.github.io: not found
+$ $ Error: evalsymlink failure on 'config/default' : lstat /home/dani/src/redis-operator/config/manager/config: no such file or directory
+error: no objects passed to apply
+/usr/bin/sh: 36: namespace/redis-operator-system: not found
+/usr/bin/sh: 37: customresourcedefinition.apiextensions.k8s.io/redis.redis.danieldorado.github.io: not found
+/usr/bin/sh: 38: role.rbac.authorization.k8s.io/redis-operator-leader-election-role: not found
+/usr/bin/sh: 39: clusterrole.rbac.authorization.k8s.io/redis-operator-manager-role: not found
+/usr/bin/sh: 40: clusterrole.rbac.authorization.k8s.io/redis-operator-metrics-reader: not found
+/usr/bin/sh: 41: clusterrole.rbac.authorization.k8s.io/redis-operator-proxy-role: not found
+/usr/bin/sh: 42: rolebinding.rbac.authorization.k8s.io/redis-operator-leader-election-rolebinding: not found
+/usr/bin/sh: 43: clusterrolebinding.rbac.authorization.k8s.io/redis-operator-manager-rolebinding: not found
+/usr/bin/sh: 44: clusterrolebinding.rbac.authorization.k8s.io/redis-operator-proxy-rolebinding: not found
+/usr/bin/sh: 45: service/redis-operator-controller-manager-metrics-service: not found
+/usr/bin/sh: 46: deployment.apps/redis-operator-controller-manager: not found
 #+END_SRC
 
 - Deployed in: =namespace/redis-operator-system created=
@@ -121,6 +226,12 @@ make deploy IMG=danieladf/$OPERATOR_IMAGE_REPO:0.0.1
 #+BEGIN_SRC  sh
 oc project default
 oc apply -f config/samples/redis_v1alpha1_redis.yaml
+#+END_SRC
+
+#+RESULTS:
+#+BEGIN_SRC sh
+Already on project "default" on server "https://api.crc.testing:6443".
+redis.redis.danieldorado.github.io/redis-sample created
 #+END_SRC
 
 Clean all:

@@ -1,0 +1,43 @@
+* Redis Cluster Gossip Protocol
+
+Image to use: =redis:5.0.10=
+
+Can I use this? How it works?
+
+Create cluster: It configure the slots.
+
+#+BEGIN_SRC sh
+kubectl exec -it redis-cluster-0 -- redis-cli --cluster create --cluster-replicas 1 $(kubectl get pods -l app=redis-cluster -o jsonpath='{range.items[*]}{.status.podIP}:6379 ')
+#+END_SRC
+
+- Reference: https://rancher.com/blog/2019/deploying-redis-cluster
+
+* Changelog summary
+
+** Redis 3.2 to 4.0.14
+
+"Note that 4.0 is probably one of the most extreme releases of Redis ever made in terms of changes inside the 
+internals."
+
+- No compatible redis bus protocol. To provide Docker / NAT compatibility to Redis Cluster.
+  Redis Cluster support for NAT / Docker. There are new functionalities in order to force cluster instances to
+  announce specific sets of IP address, client and bus ports, to the rest of the cluster, regardless of the auto
+  detected IP. This required a bus protocol change that will force users to mass-restart all the nodes of a 
+  Redis 3.2 installation in order to upgrade to 4.0.
+- Redis Cluster CLUSTER NODES output is now slightly different. Nodes addresses are now in the form
+  host:port@bus-port instead of host:port. Use *CLUSTER SLOTS* to catch node configuration.
+- Certain INFO fields, especially related to replication, are now different.
+- Redis modules system
+- Cache eviction improvements. Add LFU (Least Frequently Used).
+- Add command MEMORY DOCTOR as LATENCY DOCTOR but for memory.
+
+** Redis 4.0 to 5.0
+
+"While Redis 4 was very very focused on operations, Redis 5 changes are mostly user-facing,
+with the implementation of new data types and operations on top of existing types"
+
+- redis-cli now implements the cluster management tool.
+  The cluster manager was ported from Ruby (redis-trib.rb) to C code inside redis-cli. Check `redis-cli --cluster help` for more info.
+- The new Stream data type. https://redis.io/topics/streams-intro
+- New Redis modules APIs: Timers, Cluster and Dictionary APIs.
+- Better memory reporting capabilities.
