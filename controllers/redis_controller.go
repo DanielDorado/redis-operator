@@ -142,9 +142,11 @@ func (r *RedisReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	return ctrl.Result{}, nil
 }
 
+// SetupWithManager wath to watch
 func (r *RedisReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&redisv1alpha1.Redis{}).
+		Owns(&appsv1.StatefulSet{}).
 		Complete(r)
 }
 
