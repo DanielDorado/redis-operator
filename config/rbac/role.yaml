@@ -25,6 +25,7 @@ rules:
   verbs:
   - get
   - list
+  - watch
 - apiGroups:
   - redis.danieldorado.github.io
   resources:

@@ -56,7 +56,7 @@ type RedisReconciler struct {
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
-// Creates or reconciles a StatefulSet, the redis cluster) and an StatefulSet (the redis operator).
+// Creates or reconciles a StatefulSet (the redis cluster) and a Deployment (the redis operator).
 func (r *RedisReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
 	log := r.Log.WithValues("redis", req.NamespacedName)
@@ -80,14 +80,16 @@ func (r *RedisReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 	// Check if the StatefulSet already exists, if not create a new one
 	found := &appsv1.StatefulSet{}
+	// LOAD THE STATEFULSET
 	err = r.Get(ctx, types.NamespacedName{Name: redis.Name, Namespace: redis.Namespace}, found)
 	if err != nil && errors.IsNotFound(err) {
 		// Define a new StatefulSet
-		dep := r.statefulSetForRedis(redis)
-		log.Info("Creating a new StatefulSet", "StatefulSet.Namespace", dep.Namespace, "StatefulSet.Name", dep.Name)
-		err = r.Create(ctx, dep)
+		ss := r.statefulSetForRedis(redis)
+		log.Info("Creating a new StatefulSet", "StatefulSet.Namespace", ss.Namespace, "StatefulSet.Name", ss.Name)
+		// TODO: Change create for patch?
+		err = r.Create(ctx, ss)
 		if err != nil {
-			log.Error(err, "Failed to create new StatefulSet", "StatefulSet.Namespace", dep.Namespace, "StatefulSet.Name", dep.Name)
+			log.Error(err, "Failed to create new StatefulSet", "StatefulSet.Namespace", ss.Namespace, "StatefulSet.Name", ss.Name)
 			return ctrl.Result{}, err
 		}
 		// StatefulSet created successfully - return and requeue
@@ -144,10 +146,19 @@ func (r *RedisReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 // SetupWithManager wath to watch
 func (r *RedisReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	// owns is like Watches(&source.Kind{Type: <ForType-forInput>}, &handler.EnqueueRequestForOwner{OwnerType: apiType, IsController: true})
+	// But the StatefulSet Pods??? We don't care about Pods, StatefulSet only *Redis* objects.
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&redisv1alpha1.Redis{}).
 		Owns(&appsv1.StatefulSet{}).
 		Complete(r)
+	/* TODO: Watch other objects that does not owns: https://pres.metamagical.dev/kubecon-us-2019/#slide-33
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&redisv1alpha1.Redis{}).
+		Owns(&appsv1.StatefulSet{}).
+		// Watches.... (example booksUsingRedis...)
+		Complete(r)
+	*/
 }
 
 // TODO fill this

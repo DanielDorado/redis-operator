@@ -118,29 +118,11 @@ make docker-build docker-push IMG=danieladf/$OPERATOR_IMAGE_REPO:0.0.2
 
 Create and edit the role patch: [[file:config/default/role_patch.yml]] patch [[file:config/rbac/role.yaml]]
 
+Alternatively to deploy you can run local: =make run=
+
 #+BEGIN_SRC sh
 make install
 make deploy IMG=danieladf/$OPERATOR_IMAGE_REPO:0.0.2
-#+END_SRC
-
-#+RESULTS:
-#+BEGIN_SRC sh
-
-customresourcedefinition.apiextensions.k8s.io/redis.redis.danieldorado.github.io configured
-/usr/bin/sh: 32: customresourcedefinition.apiextensions.k8s.io/redis.redis.danieldorado.github.io: not found
-$ $ Error: evalsymlink failure on 'config/default' : lstat /home/dani/src/redis-operator/config/manager/config: no such file or directory
-error: no objects passed to apply
-/usr/bin/sh: 36: namespace/redis-operator-system: not found
-/usr/bin/sh: 37: customresourcedefinition.apiextensions.k8s.io/redis.redis.danieldorado.github.io: not found
-/usr/bin/sh: 38: role.rbac.authorization.k8s.io/redis-operator-leader-election-role: not found
-/usr/bin/sh: 39: clusterrole.rbac.authorization.k8s.io/redis-operator-manager-role: not found
-/usr/bin/sh: 40: clusterrole.rbac.authorization.k8s.io/redis-operator-metrics-reader: not found
-/usr/bin/sh: 41: clusterrole.rbac.authorization.k8s.io/redis-operator-proxy-role: not found
-/usr/bin/sh: 42: rolebinding.rbac.authorization.k8s.io/redis-operator-leader-election-rolebinding: not found
-/usr/bin/sh: 43: clusterrolebinding.rbac.authorization.k8s.io/redis-operator-manager-rolebinding: not found
-/usr/bin/sh: 44: clusterrolebinding.rbac.authorization.k8s.io/redis-operator-proxy-rolebinding: not found
-/usr/bin/sh: 45: service/redis-operator-controller-manager-metrics-service: not found
-/usr/bin/sh: 46: deployment.apps/redis-operator-controller-manager: not found
 #+END_SRC
 
 - Deployed in: =namespace/redis-operator-system created=
@@ -157,4 +139,49 @@ Clean all:
 #+BEGIN_SRC sh
 make uninstall
 oc delete project/redis-operator-system
+#+END_SRC
+
+
+* Test
+
+Controller test:
+
+#+BEGIN_SRC sh
+go test ./controllers/ -v -ginkgo.v
+#+END_SRC
+
+* TEST
+
+Using envtest with ginkgo and gomega.
+
+- All nodes deleted at same time.
+
+* Advancing topics
+
+** Conditions
+
+#+BEGIN_SRC go
+import (
+    "github.com/operator-framework/operator-lib/status"
+)
+
+type MyAppStatus struct {
+    // Conditions represent the latest available observations of an object's state
+    Conditions status.Conditions `json:"conditions"`
+}
+#+END_SRC
+
+
+** Expectations
+
+In-memory expectations.
+
+Guarantees.
+
+** reflect.DeepEqual
+
+Does not work because of mutating fields added. Use a annotation hash with our fields.
+#+BEGIN_SRC go
+hash := HashObject(expected)
+expected.Annotations[ResourceHash] = hash
 #+END_SRC
