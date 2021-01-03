@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -61,7 +62,7 @@ func (r *RedisReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
 	log := r.Log.WithValues("redis", req.NamespacedName)
 
-	// Fetch the redis instance
+	// Fetch the Redis instance
 	redis := &redisv1alpha1.Redis{}
 	err := r.Get(ctx, req.NamespacedName, redis)
 	if err != nil {
@@ -78,18 +79,21 @@ func (r *RedisReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		log.Error(err, "Failed to get Redis - reque the request.")
 		return ctrl.Result{}, err
 	}
-	// Check if the StatefulSet already exists, if not create a new one
+
+	// Does the StatefulSet exist?
+	ctxtError := []interface{}{"Redis.Name", redis.Name, "Redis.Namespace", redis.Namespace, "Redis.Size",
+		redis.Spec.Size}
 	found := &appsv1.StatefulSet{}
-	// LOAD THE STATEFULSET
 	err = r.Get(ctx, types.NamespacedName{Name: redis.Name, Namespace: redis.Namespace}, found)
 	if err != nil && errors.IsNotFound(err) {
-		// Define a new StatefulSet
 		ss := r.statefulSetForRedis(redis)
-		log.Info("Creating a new StatefulSet", "StatefulSet.Namespace", ss.Namespace, "StatefulSet.Name", ss.Name)
-		// TODO: Change create for patch?
+		log.Info("Creating a new StatefulSet", ctxtError...)
+		// We can change create for path. Is it better?
 		err = r.Create(ctx, ss)
 		if err != nil {
-			log.Error(err, "Failed to create new StatefulSet", "StatefulSet.Namespace", ss.Namespace, "StatefulSet.Name", ss.Name)
+			errorSS := []interface{}{"StatefulSet.Name", ss.Name, "StatefulSet.Namespace", ss.Namespace}
+			errorSS = append(errorSS, ctxtError...)
+			log.Error(err, "Failed to create new StatefulSet", errorSS)
 			return ctrl.Result{}, err
 		}
 		// StatefulSet created successfully - return and requeue
@@ -98,15 +102,46 @@ func (r *RedisReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		log.Error(err, "Failed to get StatefulSet")
 		return ctrl.Result{}, err
 	}
-	// TODO Create statefulset, how to do this according to the statefulSet??
-	// Check if the statefulset already exsits, if not create a new one
 
-	// There are Both objects
+	// Redis Size == StatefulSet Replicas?
+	ctxtError = append(ctxtError, []interface{}{"StatefulSet.Name", found.Name, "StatefulSet.Replicas", *found.Spec.Replicas}...)
+	if *found.Spec.Replicas != redis.Spec.Size {
+		// applyOpts := []client.PatchOption{client.ForceOwnership, client.FieldOwner("guestbook")}
+		log.Info("Fixing replicas mismatch:", ctxtError...)
+		*found.Spec.Replicas = redis.Spec.Size
+		// *&found.ManagedFields = nil
+		// if err := r.Patch(ctx, found, client.Apply, []client.PatchOption{}...); err != nil {
+		// options := client.PatchOption{}
+		// "PatchOptions.meta.k8s.io \"\" is invalid: fieldManager: Required value:
+		//   is required for apply patch"
+		// "error": "metadata.managedFields must be nil"}
+		// option := &client.PatchOptions{FieldManager: "main"}
+		// if err := r.Patch(ctx, found, client.Apply, option); err != nil {
+		if err := r.Update(ctx, found); err != nil {
+			log.Error(err, "Failed fixing replicas mismatch", ctxtError...)
+			return ctrl.Result{}, err
+		}
 
-	// TODO Ensure the statefulset size is the same as the spec
-	size := redis.Spec.Size
+		err := fmt.Errorf("Mismatch StatefulSet replicas and Redis size: %+v", ctxtError...)
+		return ctrl.Result{}, err
+	}
 
-	log.Info("Redis size", "Redis.Size", size, "StatefulSet.Namespace", redis.Namespace, "StatefulSet.Name", redis.Name)
+	// Are StatefulSet Pods OK?
+	if found.Status.ReadyReplicas != redis.Spec.Size {
+		// log.Info("Waiting for pods to be ready...", ctxtError...)
+		err := fmt.Errorf("Waiting for Redis pods: %v", ctxtError...)
+		return ctrl.Result{}, err
+	}
+
+	// The Redis Pod are in cluster?
+	log.Info("Begining the Redis operations...", ctxtError...)
+
+	// The cluster is Ok?
+	// Check cluster. Configure cluster.
+	// is configured??? Ask to -0... $ cluster info serviceName -0
+
+	// The Slots are assigned?
+
 	/*
 		if *found.Spec.Replicas != size {
 			found.Spec.Replicas = &size

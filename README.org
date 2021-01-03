@@ -5,6 +5,12 @@
 - Cluster: sharding (performance). 
 - Sentinel: HA (high availibility).
 
+* Redis workflow
+
+Steps:
+
+1. Is Cluster Unconfigured? cluster. =redis info -h redis-cluster-0.redis-cluster
+
 * Redis Operator examples
 
 Lot of examples, but that assign redis slots only this one:
