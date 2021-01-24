@@ -34,6 +34,8 @@ import (
 
 	"github.com/danieldorado/redis-operator/api/v1alpha1"
 	redisv1alpha1 "github.com/danieldorado/redis-operator/api/v1alpha1"
+	"github.com/danieldorado/redis-operator/pkg/k8sutils"
+	redisutil "github.com/danieldorado/redis-operator/pkg/redis"
 )
 
 const (
@@ -133,28 +135,11 @@ func (r *RedisReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
+	// TODO: Add state to status: creating, configuring, running...
 	// The Redis Pod are in cluster?
+	// I do cluster meet because it have less cost that answer the nodes their pairs
 	log.Info("Begining the Redis operations...", ctxtError...)
-
-	// The cluster is Ok?
-	// Check cluster. Configure cluster.
-	// is configured??? Ask to -0... $ cluster info serviceName -0
-
-	// The Slots are assigned?
-
-	/*
-		if *found.Spec.Replicas != size {
-			found.Spec.Replicas = &size
-			err = r.Update(ctx, found)
-			if err != nil {
-				log.Error(err, "Failed to update StatefulSet", "StatefulSet.Namespace", found.Namespace, "StatefulSet.Name", found.Name)
-				return ctrl.Result{}, err
-			}
-			// Spec updated - return and requeue
-			return ctrl.Result{Requeue: true}, nil
-		}
-	*/
-	// Update the Redis status with the pod names
+	// get pod names
 	podList := &corev1.PodList{}
 	listOpts := []client.ListOption{
 		client.InNamespace(redis.Namespace),
@@ -164,14 +149,23 @@ func (r *RedisReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		log.Error(err, "Failed to list pods", "Redis.Namespace", redis.Namespace, "Redis.Name", redis.Name)
 		return ctrl.Result{}, err
 	}
-	podNames := getPodNames(podList.Items)
+	orderedNodes := k8sutils.NewOrderedNodes(podList.Items)
+	err = redisutil.ConfigureClusterMode(ctx, orderedNodes.IPs())
+	if err != nil {
+		log.Error(err, "Failed when cofiguring cluster meet", "Redis.Namespace", redis.Namespace, "Redis.Name", redis.Name)
+		return ctrl.Result{}, err
+	}
+
+	// The Slots are assigned?
+	err = redisutil.ConfigureSlots(ctx, orderedNodes.IPs())
 
 	// Update status.Nodes if needed
+	podNames := orderedNodes.PodNames()
 	if !reflect.DeepEqual(podNames, redis.Status.Nodes) {
 		redis.Status.Nodes = podNames
 		err := r.Status().Update(ctx, redis)
 		if err != nil {
-			log.Error(err, "Failed to update Memcached status")
+			log.Error(err, "Failed to update Redis status")
 			return ctrl.Result{}, err
 		}
 	}
@@ -224,6 +218,7 @@ func (r *RedisReconciler) statefulSetForRedis(redis *v1alpha1.Redis) *appsv1.Sta
 						Ports:   []corev1.ContainerPort{},
 					}},
 				}},
+			// TODO: VolumeClaimTemplates: []corev1.PersistentVolumeClaim{},
 		},
 	}
 	ctrl.SetControllerReference(redis, ss, r.Scheme)
@@ -233,13 +228,4 @@ func (r *RedisReconciler) statefulSetForRedis(redis *v1alpha1.Redis) *appsv1.Sta
 // TODO fill this
 func labelsForRedis(name string) map[string]string {
 	return map[string]string{"app": "redis", "redis_cr": name}
-}
-
-// TODO fill this
-func getPodNames(pods []corev1.Pod) []string {
-	var podNames []string
-	for _, pod := range pods {
-		podNames = append(podNames, pod.Name)
-	}
-	return podNames
 }

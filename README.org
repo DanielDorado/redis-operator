@@ -1,15 +1,126 @@
-* Redis notes
+* WARNING - WORK IN PROGRESS
 
-** Redis Cluster vs Sentinel
+*WIP* This project is only for learning purposes.
 
-- Cluster: sharding (performance). 
-- Sentinel: HA (high availibility).
+* Intro
 
-* Redis workflow
+Redis-Cluster Operator.
+
+* Redis operator workflow
+
+[[./docs/images/redis_operator.png]]
+
+The redis cluster is composed by:
+
+- redis-cluster statefulset. The data plane.
+- Operator. A software operator that configures the cluster.
 
 Steps:
 
-1. Is Cluster Unconfigured? cluster. =redis info -h redis-cluster-0.redis-cluster
+** Step 1. Configure Cluster
+
+For each node, execute cluster meet among all IPs.
+
+#+BEGIN_SRC sh
+SERVICE=redis-cluster
+getent hosts $SERVICE
+# cartesian product IPs x IPs
+redis-cli -h $IP1 -p $REDIS_PORT cluster meet $IP2 $REDIS_PORT
+# sleep to allow configuration propagate
+sleep $ClusterHealingTimeSeconds
+#+END_SRC
+
+** Steep 2. Cluster well formed?
+
+#+BEGIN_SRC sh
+# for each redis node:
+redis-cli -h $IP -p $PORT cluster nodes
+# Get the IPs and check that are correct...
+# if they are not do the meet, for all pods
+redis-cli -h $IP1 -p $PORT cluster meet $IP2
+#+END_SRC
+
+** Step 3. Assign Slots to Nodes
+
+There are 16384 slots, they have to be shared among nodes.
+
+Bash example with very slow implementation:
+
+#+BEGIN_SRC src
+for slot in {0..5461}; do redis-cli -p 7000 CLUSTER ADDSLOTS $slot > /dev/null; done;
+for slot in {5462..10923}; do redis-cli -p 7001 CLUSTER ADDSLOTS $slot > /dev/null; done;
+for slot in {10924..16383}; do redis-cli -p 7002 CLUSTER ADDSLOTS $slot > /dev/null; done;
+#+END_SRC
+
+Better implementation:
+
+#+BEGIN_SRC src
+redis-cli -p 7000 CLUSTER ADDSLOTS 0 1 2 3 4 5 ... 5461
+#+END_SRC
+
+I don't assign slaves because I suppose =--replicas == 0=, but if it is needed, note that slaves are assigned using
+"cluster replicate". Example:
+
+#+BEGIN_SRC sh
+#  Not implemented
+# redis-cli -c -p <port_of_slave> cluster replicate <node_id_of_its_master>
+redis-cli -p 7003 cluster replicate 0db8943cccb9b8c3963af78019baf8d2db827f14
+#+END_SRC
+
+** Golang redis libraries
+
+Among the golang libraries that have the necessary functionalities, I compare the most used against the redis.io
+recommeded:
+
+- go-redis: https://github.com/go-redis/redis
+- radix: https://github.com/mediocregopher/radix
+
+Radix pros:
+
+- Recommended by redis.io.
+- Better performance.
+- Minimalistic approach. You write the command text.
+
+Example:
+
+#+BEGIN_SRC go
+client, err := redis.Dial("tcp", "localhost:6379")
+if err != nil {
+	panic(err)
+}
+foo, err := client.Cmd("GET", "foo").Str()
+if err != nil {
+	panic(err)
+}
+
+// Checking Err field directly
+err = client.Cmd("SET", "foo", "bar", "EX", 3600).Err
+if err != nil {
+	// handle err
+}
+#+END_SRC
+
+Go-redis pros:
+
+- More github users and activity.
+- Exposes Redis commands as function calls. Avoiding the need to parse commands at run-time. 
+
+#+BEGIN_SRC go
+rdb := redis.NewClient(&redis.Options{
+	Addr:     "localhost:6379",
+	Password: "", // no password set
+	DB:       0,  // use default DB
+})
+
+err := rdb.Set(ctx, "key", "value", 0).Err()
+if err != nil {
+	panic(err)
+}
+
+#+END_SRC
+
+Election: I choose =go-redis/redis= because a operator does not need redis performance and simplicity andclarity in
+the code is important.
 
 * Redis Operator examples
 
@@ -39,9 +150,9 @@ The redis part: https://github.com/kubedb/redis/
 
 1. Install
 
-* Build
+* Build and check
 
-All the commands I use to build the operator. To run the
+All the commands I use to build the operator.
 
 #+PROPERTY: header-args:sh  :session *sh*  :results output verbatim code replace
 
@@ -111,7 +222,7 @@ Use OpenAPI to validate: [[https://sdk.operatorframework.io/docs/building-operat
 ** TODO Define the Controller. Redis Controller.
 
 - [[file:controllers/redis_controller.go]]
-
+ 
 ** Build and Push operator image
 
 Kubebuilder is a prerequisite.
@@ -147,7 +258,6 @@ make uninstall
 oc delete project/redis-operator-system
 #+END_SRC
 
-
 * Test
 
 Controller test:
@@ -156,14 +266,11 @@ Controller test:
 go test ./controllers/ -v -ginkgo.v
 #+END_SRC
 
-* TEST
-
 Using envtest with ginkgo and gomega.
 
 - All nodes deleted at same time.
 
-* Advancing topics
-
+* Operator Advancing topics
 ** Conditions
 
 #+BEGIN_SRC go
@@ -176,7 +283,6 @@ type MyAppStatus struct {
     Conditions status.Conditions `json:"conditions"`
 }
 #+END_SRC
-
 
 ** Expectations
 
@@ -191,3 +297,11 @@ Does not work because of mutating fields added. Use a annotation hash with our f
 hash := HashObject(expected)
 expected.Annotations[ResourceHash] = hash
 #+END_SRC
+* TODO Other controllers
+
+Other redis controllers that we need for the redis operator.
+
+Examples:
+
+- Backup controller =controller/redis_backup_controller.go=
+- Restore controller =controller/redis_backup_controller.go=

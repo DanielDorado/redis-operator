@@ -12,17 +12,81 @@ kubectl exec -it redis-cluster-0 -- redis-cli --cluster create --cluster-replica
 
 - Reference: https://rancher.com/blog/2019/deploying-redis-cluster
 
+* Configuring Cluster
+
+https://redis.io/topics/cluster-tutorial
+
+=cluster create= script can do this automatically, it suggest a configuration, you assert it with "yes" and
+all the steps are done.
+
+** Step 1. Minimal config
+
+#+BEGIN_SRC
+port 7000
+cluster-enabled yes
+cluster-config-file nodes.conf
+cluster-node-timeout 5000
+appendonly yes
+#+END_SRC
+
+**At least three master nodes.**
+
+Running:
+
+#+BEGIN_SRC
+../redis-server ./redis.conf
+#+END_SRC
+
+** Step 2. Cluster Join
+
+Execute cluster meet, in pairs, one path is enough, A and B, B and C. Or A and B, A and C.
+
+** Step 3. Add Slots - Shard and Reshard
+
+I have to add slots or I can reshard it?
+
+How many slots do you want to move (from 1 to 16384)?
+
+#+BEGIN_SRC
+redis-cli --cluster reshard 127.0.0.1:7000
+#+END_SRC
+
+"This allows to build some automatism if you are likely to reshard often, however currently there is no
+way for redis-cli to automatically rebalance the cluster checking the distribution of keys across the cluster
+nodes and intelligently moving slots as needed. This feature will be added in the future."
+
+Add and remove a cluster node: https://redis.io/topics/cluster-tutorial
+
+Cluster live reconfiguration: https://redis.io/topics/cluster-spec
+
+Rebalance is key to add and to remove.
+
+Important commands:
+
+- CLUSTER ADDSLOTS slot1 [slot2] ... [slotN] - when a new cluster is created
+- CLUSTER DELSLOTS slot1 [slot2] ... [slotN] - for manual modification of a cluster configuration or for
+  debugging tasks: in practice it is rarely used.
+- CLUSTER SETSLOT slot NODE node - assign slot to a node
+- CLUSTER SETSLOT slot MIGRATING node - accept if key exist
+- CLUSTER SETSLOT slot IMPORTING node - accept all if preceding by an ASKING command, else MOVED error.
+
+In the meantime, a special program called redis-trib used during reshardings and Redis Cluster configuration
+will migrate existing keys in hash slot 8 from A to B. This is performed using the following command:
+
+- CLUSTER GETKEYSINSLOT slot count
+- MIGRATE target_host target_port key target_database id timeout
+
 * Changelog summary
 
 ** Redis 3.2 to 4.0.14
 
-"Note that 4.0 is probably one of the most extreme releases of Redis ever made in terms of changes inside the 
+"Note that 4.0 is probably one of the most extreme releases of Redis ever made in terms of changes inside the
 internals."
 
 - No compatible redis bus protocol. To provide Docker / NAT compatibility to Redis Cluster.
   Redis Cluster support for NAT / Docker. There are new functionalities in order to force cluster instances to
   announce specific sets of IP address, client and bus ports, to the rest of the cluster, regardless of the auto
-  detected IP. This required a bus protocol change that will force users to mass-restart all the nodes of a 
+  detected IP. This required a bus protocol change that will force users to mass-restart all the nodes of a
   Redis 3.2 installation in order to upgrade to 4.0.
 - Redis Cluster CLUSTER NODES output is now slightly different. Nodes addresses are now in the form
   host:port@bus-port instead of host:port. Use *CLUSTER SLOTS* to catch node configuration.
@@ -41,3 +105,7 @@ with the implementation of new data types and operations on top of existing type
 - The new Stream data type. https://redis.io/topics/streams-intro
 - New Redis modules APIs: Timers, Cluster and Dictionary APIs.
 - Better memory reporting capabilities.
+* Redis Cluster vs Sentinel
+
+- Cluster: sharding (performance).
+- Sentinel: HA (high availibility).
